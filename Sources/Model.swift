@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import EventKit
 import SwiftUI
+import ServiceManagement
 
 // MARK: - 데이터 모델
 
@@ -89,6 +90,10 @@ final class Radar: ObservableObject {
     @Published var pinnedKey: String? = UserDefaults.standard.string(forKey: "pinned") {
         didSet { UserDefaults.standard.set(pinnedKey, forKey: "pinned") }
     }
+
+    /// 로그인할 때 자동 실행 (시스템 설정 → 일반 → 로그인 항목에 등록)
+    @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @Published var loginError: String?
 
     // 캘린더
     @Published var calAccess: Bool?
@@ -265,6 +270,16 @@ final class Radar: ObservableObject {
         let d = Self.days(until: e.at, from: now)
         let dd = d <= 0 ? "D-DAY" : "D-\(d)"
         return "\(e.emoji) \(e.short) \(dd) · \(Self.hms(e.at.timeIntervalSince(now)))"
+    }
+
+    func setLaunchAtLogin(_ on: Bool) {
+        do {
+            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            loginError = nil
+        } catch {
+            loginError = "로그인 항목을 바꾸지 못했어요: \(error.localizedDescription)"
+        }
+        launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
     // MARK: 캘린더 탭

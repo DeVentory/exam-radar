@@ -87,6 +87,7 @@ struct RootView: View {
         HStack {
             Text(radar.calAccess == true ? "🔗 캘린더 연동 중" : "📄 exams.json")
             if radar.pinnedExam != nil { Text("· 📌 고정") }
+            if radar.launchAtLogin { Text("· 🔁") }
             Text("· \(quizScope) · \(radar.questions.count)문항")
             Spacer()
             Button("종료") { NSApp.terminate(nil) }.buttonStyle(.borderless)
@@ -568,6 +569,14 @@ struct StatsView: View {
                 }
 
                 Divider()
+                Text("설정").font(.system(size: 13, weight: .semibold))
+                Toggle("로그인할 때 자동 실행", isOn: Binding(
+                    get: { radar.launchAtLogin },
+                    set: { radar.setLaunchAtLogin($0) }))
+                    .toggleStyle(.switch).controlSize(.small).font(.system(size: 12))
+                if let err = radar.loginError {
+                    Text(err).font(.caption).foregroundStyle(.red)
+                }
                 HStack {
                     if confirmReset {
                         Text("기록을 모두 지울까요?").font(.caption)
