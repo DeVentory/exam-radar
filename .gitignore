@@ -1,0 +1,7 @@
+# 빌드 결과
+build/
+.DS_Store
+
+# 내 문제은행과 작업 파일 (강의자료에서 옮긴 내용이라 공개하지 않음)
+Resources/questions.json
+private/
