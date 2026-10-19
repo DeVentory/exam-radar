@@ -1,7 +1,9 @@
 #!/opt/homebrew/bin/python3
 """SE 중간고사 D-day 바탕화면. launchd가 매일 0시·13시·로그인 때 실행.
+모든 데스크톱 공간(Spaces)에 적용하려고 바탕화면 설정 파일(Index.plist)에서 이 스크립트가 만든 그림을 가리키는 항목을 함께 바꾼다.
 시험이 끝나면(10/22 13:00 KST 이후) 원래 배경으로 복원하고 예약을 스스로 지운다."""
-import math, random, subprocess, glob, os
+import math, random, subprocess, glob, os, plistlib
+from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -14,6 +16,8 @@ DIR = os.path.join(HOME, "Pictures/claude-wallpaper")
 LABEL = "com.claude.sewallpaper"
 PLIST = os.path.join(HOME, f"Library/LaunchAgents/{LABEL}.plist")
 W, H = 3024, 1964
+FIXED = os.path.join(DIR, "se-dday.png")  # 모든 데스크톱 공간이 가리키는 고정 파일
+STORE = os.path.join(HOME, "Library/Application Support/com.apple.wallpaper/Store/Index.plist")
 
 GOTHIC = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
 EMOJI = "/System/Library/Fonts/Apple Color Emoji.ttc"
@@ -23,6 +27,46 @@ def set_wallpaper(path):
     subprocess.run(["osascript", "-e",
                     f'tell application "System Events" to tell every desktop to set picture to POSIX file "{path}"'],
                    check=False)
+    point_all_spaces(path)
+
+
+def point_all_spaces(path):
+    """osascript는 지금 보고 있는 공간만 바꾼다. 바탕화면 설정 파일에서
+    이 스크립트가 만든 그림(claude-wallpaper)을 가리키는 항목을 모든 공간에서 path로 바꾸고 다시 읽게 한다."""
+    try:
+        with open(STORE, "rb") as f:
+            store = plistlib.load(f)
+    except (OSError, plistlib.InvalidFileException):
+        return
+    uri = Path(path).as_uri()
+    changed = 0
+
+    def fix(o):
+        nonlocal changed
+        if isinstance(o, dict):
+            for k, v in o.items():
+                if k == "Configuration" and isinstance(v, bytes) and v:
+                    try:
+                        inner = plistlib.loads(v)
+                    except Exception:
+                        continue
+                    url = inner.get("url", {}) if isinstance(inner, dict) else {}
+                    if "claude-wallpaper" in url.get("relative", "") and url["relative"] != uri:
+                        url["relative"] = uri
+                        fmt = plistlib.FMT_BINARY if v.startswith(b"bplist") else plistlib.FMT_XML
+                        o[k] = plistlib.dumps(inner, fmt=fmt)
+                        changed += 1
+                else:
+                    fix(v)
+        elif isinstance(o, list):
+            for v in o:
+                fix(v)
+
+    fix(store)
+    if changed:
+        with open(STORE, "wb") as f:
+            plistlib.dump(store, f, fmt=plistlib.FMT_BINARY)
+    subprocess.run(["killall", "WallpaperAgent"], check=False, capture_output=True)
 
 
 def restore():
@@ -121,10 +165,15 @@ def main():
         return
     for old in glob.glob(os.path.join(DIR, "se-dday-*.png")):
         os.remove(old)
-    path = os.path.join(DIR, f"se-dday-{now:%m%d%H%M}.png")  # 경로를 바꿔야 macOS가 캐시 대신 새 그림을 씀
-    draw(now).save(path)
-    set_wallpaper(path)
+    tmp = FIXED + ".tmp.png"
+    draw(now).save(tmp)
+    os.replace(tmp, FIXED)
+    set_wallpaper(FIXED)
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--restore" in sys.argv:  # 지금 바로 원래 배경으로 (restore_wallpaper.sh)
+        restore()
+    else:
+        main()
