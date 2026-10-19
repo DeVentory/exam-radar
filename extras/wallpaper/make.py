@@ -7,6 +7,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 KST = timezone(timedelta(hours=9))
 EXAM = datetime(2026, 10, 22, 10, 30, tzinfo=KST)
+PLACE = ""  # 시험 장소. 비워 두면 날짜·시간만 보여준다
 END = datetime(2026, 10, 22, 13, 0, tzinfo=KST)
 HOME = os.path.expanduser("~")
 DIR = os.path.join(HOME, "Pictures/claude-wallpaper")
@@ -85,7 +86,8 @@ def draw(now):
     x0 = (W - total) / 2
     img.paste(em, (int(x0), 520), em)
     d.text((x0 + em.width + 60, 400), big, font=fb, fill=(255, 196, 107))
-    ctext(d, 900, "10월 22일 (목) 10:30  ·  사범관 208", font(70, 4), (232, 236, 255))
+    when = f"{EXAM.month}월 {EXAM.day}일 ({'월화수목금토일'[EXAM.weekday()]}) {EXAM:%H:%M}"
+    ctext(d, 900, when + (f"  ·  {PLACE}" if PLACE else ""), font(70, 4), (232, 236, 255))
 
     cards = [("01 · p7", "화이트박스", ["= 구조 기반 테스트", "블랙박스 = 명세 기반"]),
              ("01 · p11", "폭포수 모델", ["선형 순차적 모델", "= 고전적 생명 주기"]),
