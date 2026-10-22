@@ -38,7 +38,7 @@ struct Exam: Identifiable {
     let place: String
     let note: String
     let at: Date
-    let done: Bool
+    var done: Bool
     var source = ""
     var color: Color = .secondary
 }
@@ -89,6 +89,14 @@ final class Radar: ObservableObject {
     /// 메뉴바에 고정할 시험 ("SE 중간|2026-10-22"). 시험이 지나면 자동으로 풀린다
     @Published var pinnedKey: String? = UserDefaults.standard.string(forKey: "pinned") {
         didSet { UserDefaults.standard.set(pinnedKey, forKey: "pinned") }
+    }
+    /// 일정 탭에서 직접 체크한 완료 상태 ("SE 중간|2026-10-22": true). exams.json의 done보다 앞선다
+    @Published var doneMarks: [String: Bool] = UserDefaults.standard.dictionary(forKey: "done") as? [String: Bool] ?? [:] {
+        didSet { UserDefaults.standard.set(doneMarks, forKey: "done") }
+    }
+    /// 일정 탭에서 완료한 일정 숨기기
+    @Published var hideDone = UserDefaults.standard.bool(forKey: "hideDone") {
+        didSet { UserDefaults.standard.set(hideDone, forKey: "hideDone") }
     }
 
     /// 로그인할 때 자동 실행 (시스템 설정 → 일반 → 로그인 항목에 등록)
@@ -150,10 +158,11 @@ final class Radar: ObservableObject {
 
     func reloadExams() {
         let notes = loadExamsJSON()
-        if calAccess == true {
-            exams = examsFromCalendar(enrich: notes)
-        } else {
-            exams = notes
+        let list = calAccess == true ? examsFromCalendar(enrich: notes) : notes
+        exams = list.map { e in
+            var e = e
+            if let d = doneMarks[Self.doneKey(e)] { e.done = d }
+            return e
         }
     }
 
@@ -237,12 +246,27 @@ final class Radar: ObservableObject {
 
     var nextExam: Exam? { exams.first { !$0.done && $0.at > now } }
 
-    static func pinKey(_ e: Exam) -> String {
+    static func ymd(_ d: Date) -> String {
         let f = DateFormatter()
         f.timeZone = kst
         f.dateFormat = "yyyy-MM-dd"
-        return "\(e.short)|\(f.string(from: e.at))"
+        return f.string(from: d)
     }
+
+    static func pinKey(_ e: Exam) -> String { "\(e.short)|\(ymd(e.at))" }
+
+    /// 완료 표시용 키. 같은 과목·같은 날 과제가 여러 개일 수 있어서 줄임말 대신 제목을 쓴다
+    static func doneKey(_ e: Exam) -> String { "\(e.name)|\(ymd(e.at))" }
+
+    func toggleDone(_ e: Exam) {
+        doneMarks[Self.doneKey(e)] = !e.done
+        // 끝난 지 30일 넘은 표시는 지운다
+        let cutoff = Self.ymd(kcal.date(byAdding: .day, value: -30, to: now)!)
+        doneMarks = doneMarks.filter { String($0.key.split(separator: "|").last ?? "") >= cutoff }
+        reloadExams()
+    }
+
+    var doneCount: Int { exams.filter(\.done).count }
 
     var pinnedExam: Exam? {
         guard let k = pinnedKey else { return nil }

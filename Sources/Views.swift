@@ -125,7 +125,16 @@ struct ScheduleView: View {
         ScrollView {
             VStack(spacing: 8) {
                 AccessBanner()
-                ForEach(radar.exams) { e in row(e) }
+                if radar.doneCount > 0 {
+                    HStack {
+                        Text("✅ 완료 \(radar.doneCount)개 · 남은 일정 \(radar.exams.count - radar.doneCount)개")
+                        Spacer()
+                        Button(radar.hideDone ? "완료 보이기" : "완료 숨기기") { radar.hideDone.toggle() }
+                            .buttonStyle(.borderless)
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
+                }
+                ForEach(radar.exams.filter { !(radar.hideDone && $0.done) }) { e in row(e) }
                 if radar.exams.isEmpty {
                     Text("다가오는 시험·마감이 없어요.")
                         .font(.callout).foregroundStyle(.secondary).padding(.top, 40)
@@ -140,9 +149,18 @@ struct ScheduleView: View {
         let pinned = radar.pinnedExam?.id == e.id
         let d = Radar.days(until: e.at, from: radar.now)
         return HStack(alignment: .top, spacing: 10) {
+            Button { radar.toggleDone(e) } label: {
+                Image(systemName: e.done ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18))
+                    .foregroundStyle(e.done ? Color.green : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .padding(.top, 4)
+            .help(e.done ? "완료 취소" : "완료로 표시")
             Text(e.emoji).font(.title2)
             VStack(alignment: .leading, spacing: 3) {
                 Text(e.name).font(.system(size: 14, weight: .semibold)).lineLimit(2)
+                    .strikethrough(e.done)
                 Text([e.kind, e.at.formatted(.dateTime.locale(Locale(identifier: "ko_KR")).month().day().weekday().hour().minute()), e.place]
                     .filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary)
@@ -166,8 +184,10 @@ struct ScheduleView: View {
                     .buttonStyle(.borderless)
                     .help(pinned ? "메뉴바 고정 풀기" : "메뉴바에 고정")
                 }
-                if past {
-                    Text("✅").font(.title3)
+                if e.done {
+                    Text("완료").font(.system(size: 13, weight: .bold)).foregroundStyle(.green)
+                } else if past {
+                    Text("지남").font(.system(size: 13, weight: .bold)).foregroundStyle(.secondary)
                 } else {
                     Text(d <= 0 ? "D-DAY" : "D-\(d)")
                         .font(.system(size: 16, weight: .bold)).foregroundStyle(isNext ? accent : .primary)
